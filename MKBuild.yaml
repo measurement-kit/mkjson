@@ -1,0 +1,21 @@
+name: mkjson
+
+docker: bassosimone/mk-debian
+
+dependencies:
+- github.com/nlohmann/json
+- github.com/catchorg/catch2
+- github.com/measurement-kit/mkdata
+
+targets:
+  libraries:
+    mkjson:
+      compile: [mkjson.cpp]
+  executables:
+    unit-tests:
+      compile: [unit-tests.cpp]
+      link: [mkjson]
+
+tests:
+  unit_tests:
+    command: unit-tests
