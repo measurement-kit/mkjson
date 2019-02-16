@@ -167,6 +167,12 @@ class JSON::Impl {
   Impl() noexcept;
 };
 
+/*explicit*/ JSON::Impl::Impl(nlohmann::json &&value) noexcept {
+  std::swap(value, nlohmann_json);
+}
+
+JSON::Impl::Impl() noexcept {}
+
 // JSON::Friend is the definition of the class friend of JSON.
 class JSON::Friend {
  public:
@@ -177,12 +183,6 @@ class JSON::Friend {
 /*static*/ nlohmann::json &JSON::Friend::unwrap(JSON &json) noexcept {
   return json.impl->nlohmann_json;
 }
-
-/*explicit*/ JSON::Impl::Impl(nlohmann::json &&value) noexcept {
-  std::swap(value, nlohmann_json);
-}
-
-JSON::Impl::Impl() noexcept {}
 
 /*explicit*/ JSON::JSON(Impl &&other_impl) noexcept : JSON{} {
   std::swap(other_impl, *impl);
