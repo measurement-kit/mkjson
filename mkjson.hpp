@@ -264,7 +264,7 @@ Result<bool> JSON::get_value_boolean() noexcept {
   auto valuep = impl->nlohmann_json.get_ptr<bool *>();
   if (valuep == nullptr) {
     result.good = false;
-    result.failure = "Not a bool";
+    result.failure = "Not a boolean";
     return result;
   }
   result.value = *valuep;
