@@ -41,12 +41,11 @@ class JSON {
   /// parse parses @p json_str and returns the result.
   static Result<JSON> parse(const std::string &json_str) noexcept;
 
-  /// serialize serializes the JSON and returns the result.
-  Result<std::string> serialize() const noexcept;
+  /// dump serializes the JSON and returns the result.
+  Result<std::string> dump() const noexcept;
 
   /// JSON creates a new null JSON.
-  JSON()
-  noexcept;
+  JSON() noexcept;
 
   /// JSON is not copy constructible.
   JSON(const JSON &) = delete;
@@ -55,14 +54,16 @@ class JSON {
   JSON &operator=(const JSON &) = delete;
 
   /// JSON is move constructible.
-  JSON(JSON &&)
-  noexcept = default;
+  JSON(JSON &&) noexcept;
 
-  /// operator= allows to move initialize a JSON.
-  JSON &operator=(JSON &&) noexcept = default;
+  /// operator= is allowed for move operations.
+  JSON &operator=(JSON &&) noexcept;
 
   /// is_array tells you whether the JSON is an array.
   bool is_array() const noexcept;
+
+  /// is_boolean tells you whether the JSON is a boolean.
+  bool is_boolean() const noexcept;
 
   /// is_float64 tells you whether the JSON is a float64.
   bool is_float64() const noexcept;
@@ -70,11 +71,11 @@ class JSON {
   /// is_int64 tells you whether the JSON is a int64.
   bool is_int64() const noexcept;
 
-  /// is_object tells you whether the JSON is an object.
-  bool is_object() const noexcept;
-
   /// is_null tells you whether the JSON is null.
   bool is_null() const noexcept;
+
+  /// is_object tells you whether the JSON is an object.
+  bool is_object() const noexcept;
 
   /// is_string tells you whether the JSON is a string.
   bool is_string() const noexcept;
@@ -88,6 +89,9 @@ class JSON {
   /// array. This method has move semantics; after it successfully returns,
   /// the JSON will become empty.
   Result<std::vector<JSON>> get_value_array() noexcept;
+
+  /// get_value_boolean is like get_value_array but for boolean.
+  Result<bool> get_value_boolean() noexcept;
 
   /// get_value_float64 is like get_value_array but for float64.
   Result<double> get_value_float64() noexcept;
@@ -161,8 +165,7 @@ class JSON::Impl {
 
 JSON::Impl::Impl() noexcept {}
 
-/*explicit*/ JSON::JSON(Impl &&other_impl) noexcept {
-  impl.reset(new JSON::Impl);
+/*explicit*/ JSON::JSON(Impl &&other_impl) noexcept : JSON{} {
   std::swap(other_impl, *impl);
 }
 
@@ -177,7 +180,7 @@ JSON::Impl::Impl() noexcept {}
   return result;
 }
 
-Result<std::string> JSON::serialize() const noexcept {
+Result<std::string> JSON::dump() const noexcept {
   Result<std::string> result;
   try {
     result.value = impl->nlohmann_json.dump();
@@ -190,8 +193,21 @@ Result<std::string> JSON::serialize() const noexcept {
 
 JSON::JSON() noexcept { impl.reset(new JSON::Impl); }
 
+JSON::JSON(JSON &&other) noexcept : JSON{} {
+  std::swap(impl, other.impl);
+}
+
+JSON &JSON::operator=(JSON &&other) noexcept {
+  std::swap(impl, other.impl);
+  return *this;
+}
+
 bool JSON::is_array() const noexcept {
   return impl->nlohmann_json.is_array();
+}
+
+bool JSON::is_boolean() const noexcept {
+  return impl->nlohmann_json.is_boolean();
 }
 
 bool JSON::is_float64() const noexcept {
@@ -202,12 +218,12 @@ bool JSON::is_int64() const noexcept {
   return impl->nlohmann_json.is_number_integer();
 }
 
-bool JSON::is_object() const noexcept {
-  return impl->nlohmann_json.is_object();
-}
-
 bool JSON::is_null() const noexcept {
   return impl->nlohmann_json.is_null();
+}
+
+bool JSON::is_object() const noexcept {
+  return impl->nlohmann_json.is_object();
 }
 
 bool JSON::is_string() const noexcept {
@@ -237,6 +253,19 @@ Result<std::vector<JSON>> JSON::get_value_array() noexcept {
   for (nlohmann::json &entry : *valuep) {
     result.value.push_back(JSON{JSON::Impl{std::move(entry)}});
   }
+  impl->nlohmann_json = nullptr;
+  return result;
+}
+
+Result<bool> JSON::get_value_boolean() noexcept {
+  Result<bool> result;
+  auto valuep = impl->nlohmann_json.get_ptr<bool *>();
+  if (valuep == nullptr) {
+    result.good = false;
+    result.failure = "Not a bool";
+    return result;
+  }
+  result.value = *valuep;
   impl->nlohmann_json = nullptr;
   return result;
 }
