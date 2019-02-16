@@ -4,201 +4,129 @@
 #ifndef MEASUREMENT_KIT_MKJSON_HPP
 #define MEASUREMENT_KIT_MKJSON_HPP
 
-/// @file mkjson.hpp. This file contains code that simplifies dealing with
-/// parsing and serializing JSON messages such as the messages exchanged by
-/// Measurement Kit's FFI API.
+#include <stdint.h>
 
-#include "json.hpp"
-#include "mkdata.hpp"
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace mk {
 namespace json {
 
-/// parse parses @p input into @p json. Returns true on success and false
-/// on failure. On failure, @p error contains the error that occurred.
-bool parse(const std::string &input, nlohmann::json &json,
-           std::string &error) noexcept;
+/// Result contains the result of an operation.
+template <typename Type>
+class Result {
+ public:
+  /// good indicates whether the operation succeeded.
+  bool good = true;
 
-/// serialize is like parse except that it serializes.
-bool serialize(const nlohmann::json &json, std::string &output,
-               std::string &error) noexcept;
+  /// failure indicates why the operation failed.
+  std::string failure;
 
-/// SwapResult is the result of a swap_value_at operation.
-enum class SwapResult {
-  /// success indicates success.
-  success,
-
-  /// bad_json_pointer indicates that the JSON pointer format is bad.
-  bad_json_pointer,
-
-  /// not_found indicates that no element was found.
-  not_found,
-
-  /// cast_failed indicates that the element has not the expected type.
-  cast_failed
+  /// value is the result of a successful operation.
+  Type value = {};
 };
 
-/// swap_value_at<@p Type> swaps @p value with the value of the JSON element in
-/// @p json pointed by @p pointer. Returns a SwapResult enumeration.
-///
-/// This template function is typically used to parse an incoming JSON
-/// document. It should work for the following @p Type types:
-///
-/// - bool
-/// - double
-/// - int64_t
-/// - std::map<std::string, nlohmann::json>
-/// - std::string
-/// - std::vector<nlohmann::json>
-///
-/// There are template specializations for std::map<std::string, std::string>
-/// and std::vector<std::string>, which are two common cases.
-template <typename Type>
-SwapResult swap_value_at(
-    nlohmann::json &json, const std::string &pointer, Type &value) noexcept {
-  nlohmann::json::json_pointer p;
-  try {
-    p = nlohmann::json::json_pointer{pointer};
-  } catch (const std::exception &) {
-    return SwapResult::bad_json_pointer;
-  }
-  nlohmann::json element;
-  try {
-    std::swap(json.at(p), element);
-  } catch (const std::exception &) {
-    return SwapResult::not_found;
-  }
-  Type *vp = element.get_ptr<Type *>();
-  if (vp == nullptr) {
-    return SwapResult::cast_failed;
-  }
-  std::swap(*vp, value);
-  return SwapResult::success;
-}
-
-/// swap_value_at<std::vector<std::string>> is a template specialization
-/// for the std::vector<std::string> common case.
+// Result<void> is a template specialization for the void special case.
 template <>
-SwapResult swap_value_at(
-    nlohmann::json &json, const std::string &pointer,
-    std::vector<std::string> &value) noexcept {
-  std::vector<nlohmann::json> vec;
-  SwapResult res = swap_value_at(json, pointer, vec);
-  if (res != SwapResult::success) {
-    return res;
-  }
-  value.clear();
-  for (auto &elem : vec) {
-    std::string s;
-    if ((res = swap_value_at(elem, "", s)) != SwapResult::success) {
-      return res;
-    }
-    value.push_back(std::move(s));
-  }
-  return SwapResult::success;
-}
-
-/// swap_value_at<std::map<std::string, std::string>> is a template
-/// specialization for the std::map<std::string, std::string> common case.
-template <>
-SwapResult swap_value_at(
-    nlohmann::json &json, const std::string &pointer,
-    std::map<std::string, std::string> &value) noexcept {
-  std::map<std::string, nlohmann::json> map;
-  SwapResult res = swap_value_at(json, pointer, map);
-  if (res != SwapResult::success) {
-    return res;
-  }
-  value.clear();
-  for (auto &elem : map) {
-    std::string s;
-    if ((res = swap_value_at(elem.second, "", s)) != SwapResult::success) {
-      return res;
-    }
-    value.emplace(std::make_pair(std::move(elem.first), std::move(s)));
-  }
-  return SwapResult::success;
-}
-
-/// MoveinResult is the result of an insert operation.
-enum class MoveinResult {
-  /// success indicates success.
-  success,
-
-  /// bad_json_pointer indicates that the JSON pointer format is bad.
-  bad_json_pointer,
-
-  /// cannot_create indicates that an element cannot be created
-  /// for a specified JSON pointer.
-  cannot_create
+class Result<void> {
+ public:
+  bool good = true;
+  std::string failure;
 };
 
-template <typename Type>
-MoveinResult movein_(
-    nlohmann::json &json, const std::string &pointer, Type &&value) noexcept {
-  nlohmann::json::json_pointer p;
-  try {
-    p = nlohmann::json::json_pointer{pointer};
-  } catch (const std::exception &) {
-    return MoveinResult::bad_json_pointer;
-  }
-  try {
-    json[p] = std::move(value);
-  } catch (const std::exception &) {
-    return MoveinResult::cannot_create;
-  }
-  return MoveinResult::success;
-}
+/// JSON is a JSON value.
+class JSON {
+ public:
+  /// parse parses @p json_str and returns the result.
+  static Result<JSON> parse(const std::string &json_str) noexcept;
 
-/// movein<@p Type> moves @p value in the JSON element pointed by @p pointer
-/// in the @p json document. Returns an enumeration indicating whether we
-/// succeeded or what error has occurred.
-///
-/// We have template specializations for types containing strings.
-template <typename Type>
-MoveinResult movein(
-    nlohmann::json &json, const std::string &pointer, Type &&value) noexcept {
-  return movein_(json, pointer, std::move(value));
-}
+  /// serialize serializes the JSON and returns the result.
+  Result<std::string> serialize() const noexcept;
 
-/// movein<std::string> is a specialized movein for strings.
-template <>
-MoveinResult movein(
-    nlohmann::json &json, const std::string &pointer,
-    std::string &&value) noexcept {
-  if (!mk::data::contains_valid_utf8(value)) {
-    value = mk::data::base64_encode(std::move(value));
-  }
-  return movein_(json, pointer, std::move(value));
-}
+  /// JSON creates a new null JSON.
+  JSON()
+  noexcept;
 
-/// movein<std::vector<std::string>> is a specialized movein for vectors
-/// containing only strings (a common case).
-template <>
-MoveinResult movein(
-    nlohmann::json &json, const std::string &pointer,
-    std::vector<std::string> &&value) noexcept {
-  for (std::string &s : value) {
-    if (!mk::data::contains_valid_utf8(s)) {
-      s = mk::data::base64_encode(std::move(s));
-    }
-  }
-  return movein_(json, pointer, std::move(value));
-}
+  /// JSON is not copy constructible.
+  JSON(const JSON &) = delete;
 
-/// movein<std::map<std::string, std::string>> is a specialized movein for maps
-/// containing only strings (a common case).
-template <>
-MoveinResult movein(
-    nlohmann::json &json, const std::string &pointer,
-    std::map<std::string, std::string> &&value) noexcept {
-  for (auto &pair : value) {
-    if (!mk::data::contains_valid_utf8(pair.second)) {
-      pair.second = mk::data::base64_encode(std::move(pair.second));
-    }
-  }
-  return movein_(json, pointer, std::move(value));
-}
+  /// operator= is not allowed for copy operations.
+  JSON &operator=(const JSON &) = delete;
+
+  /// JSON is move constructible.
+  JSON(JSON &&)
+  noexcept = default;
+
+  /// operator= allows to move initialize a JSON.
+  JSON &operator=(JSON &&) noexcept = default;
+
+  /// is_array tells you whether the JSON is an array.
+  bool is_array() const noexcept;
+
+  /// is_float64 tells you whether the JSON is a float64.
+  bool is_float64() const noexcept;
+
+  /// is_int64 tells you whether the JSON is a int64.
+  bool is_int64() const noexcept;
+
+  /// is_object tells you whether the JSON is an object.
+  bool is_object() const noexcept;
+
+  /// is_null tells you whether the JSON is null.
+  bool is_null() const noexcept;
+
+  /// is_string tells you whether the JSON is a string.
+  bool is_string() const noexcept;
+
+  /// get_value_at assumes that the JSON is an object and removes the value
+  /// currently at @p key, returning it. This method has move semantics; after
+  /// it has successfully returned, no value will be at @p key anymore.
+  Result<JSON> get_value_at(const std::string &key) noexcept;
+
+  /// get_value_array assumes that the JSON is an arrays and returns such
+  /// array. This method has move semantics; after it successfully returns,
+  /// the JSON will become empty.
+  Result<std::vector<JSON>> get_value_array() noexcept;
+
+  /// get_value_float64 is like get_value_array but for float64.
+  Result<double> get_value_float64() noexcept;
+
+  /// get_value_int64 is like get_value_array but for int64.
+  Result<int64_t> get_value_int64() noexcept;
+
+  /// get_value_string is like get_value_array but for string.
+  Result<std::string> get_value_string() noexcept;
+
+  /// set_value_at is the dual operation of get_value_at.
+  Result<void> set_value_at(const std::string &key, JSON &&value) noexcept;
+
+  /// set_value_array unconditionally sets the JSON value to be @p value. The
+  /// previous content of the JSON will be wiped.
+  void set_value_array(std::vector<JSON> &&value) noexcept;
+
+  /// set_value_float64 is like set_value_array but for float64.
+  void set_value_float64(double value) noexcept;
+
+  /// set_value_int64 is like set_value_array but for int64.
+  void set_value_int64(int64_t value) noexcept;
+
+  /// set_value_string is like set_value_array but for strings.
+  void set_value_string(std::string &&value) noexcept;
+
+  /// ~JSON destroys the allocated resources.
+  ~JSON() noexcept;
+
+ private:
+  // Impl is a forward declaration to the internal implementation.
+  class Impl;
+
+  // JSON constructs an instance from an implementation.
+  explicit JSON(Impl &&other_impl) noexcept;
+
+  // impl is a unique pointer to the internal implementation.
+  std::unique_ptr<Impl> impl;
+};
 
 }  // namespace json
 }  // namespace mk
@@ -206,30 +134,187 @@ MoveinResult movein(
 // MKJSON_INLINE_IMPL allows to inline the implementation.
 #ifdef MKJSON_INLINE_IMPL
 
+#include <utility>
+
+#include "json.hpp"
+#include "mkdata.hpp"
+
 namespace mk {
 namespace json {
 
-bool parse(const std::string &input, nlohmann::json &json,
-           std::string &error) noexcept {
-  try {
-    json = nlohmann::json::parse(input);
-  } catch (const std::exception &exc) {
-    error = exc.what();
-    return false;
-  }
-  return true;
+// JSON::Impl is the concrete implementation of JSON.
+class JSON::Impl {
+ public:
+  // nlohmann_json is the underlying nlohmann/json instance.
+  nlohmann::json nlohmann_json;
+
+  // Impl constructs the implementation from an existing JSON.
+  explicit Impl(nlohmann::json &&value) noexcept;
+
+  // Impl constructs an empty implementation.
+  Impl() noexcept;
+};
+
+/*explicit*/ JSON::Impl::Impl(nlohmann::json &&value) noexcept {
+  std::swap(value, nlohmann_json);
 }
 
-bool serialize(const nlohmann::json &json, std::string &output,
-               std::string &error) noexcept {
-  try {
-    output = json.dump();
-  } catch (const std::exception &exc) {
-    error = exc.what();
-    return false;
-  }
-  return true;
+JSON::Impl::Impl() noexcept {}
+
+/*explicit*/ JSON::JSON(Impl &&other_impl) noexcept {
+  impl.reset(new JSON::Impl);
+  std::swap(other_impl, *impl);
 }
+
+/*static*/ Result<JSON> JSON::parse(const std::string &json_str) noexcept {
+  Result<JSON> result;
+  try {
+    result.value.impl->nlohmann_json = nlohmann::json::parse(json_str);
+  } catch (const std::exception &exc) {
+    result.good = false;
+    result.failure = exc.what();
+  }
+  return result;
+}
+
+Result<std::string> JSON::serialize() const noexcept {
+  Result<std::string> result;
+  try {
+    result.value = impl->nlohmann_json.dump();
+  } catch (const std::exception &exc) {
+    result.good = false;
+    result.failure = exc.what();
+  }
+  return result;
+}
+
+JSON::JSON() noexcept { impl.reset(new JSON::Impl); }
+
+bool JSON::is_array() const noexcept {
+  return impl->nlohmann_json.is_array();
+}
+
+bool JSON::is_float64() const noexcept {
+  return impl->nlohmann_json.is_number_float();
+}
+
+bool JSON::is_int64() const noexcept {
+  return impl->nlohmann_json.is_number_integer();
+}
+
+bool JSON::is_object() const noexcept {
+  return impl->nlohmann_json.is_object();
+}
+
+bool JSON::is_null() const noexcept {
+  return impl->nlohmann_json.is_null();
+}
+
+bool JSON::is_string() const noexcept {
+  return impl->nlohmann_json.is_string();
+}
+
+Result<JSON> JSON::get_value_at(const std::string &key) noexcept {
+  Result<JSON> result;
+  try {
+    result.value.impl->nlohmann_json = std::move(impl->nlohmann_json.at(key));
+    impl->nlohmann_json.erase(key);
+  } catch (const std::exception &exc) {
+    result.good = false;
+    result.failure = exc.what();
+  }
+  return result;
+}
+
+Result<std::vector<JSON>> JSON::get_value_array() noexcept {
+  Result<std::vector<JSON>> result;
+  auto valuep = impl->nlohmann_json.get_ptr<std::vector<nlohmann::json> *>();
+  if (valuep == nullptr) {
+    result.good = false;
+    result.failure = "Not an array";
+    return result;
+  }
+  for (nlohmann::json &entry : *valuep) {
+    result.value.push_back(JSON{JSON::Impl{std::move(entry)}});
+  }
+  impl->nlohmann_json = nullptr;
+  return result;
+}
+
+Result<double> JSON::get_value_float64() noexcept {
+  Result<double> result;
+  auto valuep = impl->nlohmann_json.get_ptr<double *>();
+  if (valuep == nullptr) {
+    result.good = false;
+    result.failure = "Not a float64";
+    return result;
+  }
+  result.value = *valuep;
+  impl->nlohmann_json = nullptr;
+  return result;
+}
+
+Result<int64_t> JSON::get_value_int64() noexcept {
+  Result<int64_t> result;
+  auto valuep = impl->nlohmann_json.get_ptr<int64_t *>();
+  if (valuep == nullptr) {
+    result.good = false;
+    result.failure = "Not a int64";
+    return result;
+  }
+  result.value = *valuep;
+  impl->nlohmann_json = nullptr;
+  return result;
+}
+
+Result<std::string> JSON::get_value_string() noexcept {
+  Result<std::string> result;
+  auto valuep = impl->nlohmann_json.get_ptr<std::string *>();
+  if (valuep == nullptr) {
+    result.good = false;
+    result.failure = "Not a string";
+    return result;
+  }
+  std::swap(result.value, *valuep);
+  impl->nlohmann_json = nullptr;
+  return result;
+}
+
+Result<void> JSON::set_value_at(const std::string &key, JSON &&value) noexcept {
+  Result<void> result;
+  try {
+    std::swap(value.impl->nlohmann_json, impl->nlohmann_json[key]);
+  } catch (const std::exception &exc) {
+    result.good = false;
+    result.failure = exc.what();
+  }
+  return result;
+}
+
+void JSON::set_value_array(std::vector<JSON> &&value) noexcept {
+  std::vector<nlohmann::json> array;
+  for (JSON &entry : value) {
+    array.push_back(std::move(entry.impl->nlohmann_json));
+  }
+  impl->nlohmann_json = std::move(array);
+}
+
+void JSON::set_value_float64(double value) noexcept {
+  impl->nlohmann_json = value;
+}
+
+void JSON::set_value_int64(int64_t value) noexcept {
+  impl->nlohmann_json = value;
+}
+
+void JSON::set_value_string(std::string &&value) noexcept {
+  if (!mk::data::contains_valid_utf8(value)) {
+    value = mk::data::base64_encode(std::move(value));
+  }
+  impl->nlohmann_json = std::move(value);
+}
+
+JSON::~JSON() noexcept {}
 
 }  // namespace json
 }  // namespace mk
