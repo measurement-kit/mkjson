@@ -79,10 +79,22 @@ TEST_CASE("the JSON is not copy assignable") {
 
 TEST_CASE("the JSON is move constructible") {
   REQUIRE(std::is_move_constructible<JSON>());
+  Result<JSON> json = JSON::parse("[1, 2, 3]");
+  REQUIRE(json.good);
+  JSON other{std::move(json.value)};
+  REQUIRE(json.value.is_null());
+  REQUIRE(other.is_array());
 }
 
 TEST_CASE("the JSON is move assignable") {
   REQUIRE(std::is_move_assignable<JSON>());
+  Result<JSON> json = JSON::parse("[1, 2, 3]");
+  REQUIRE(json.good);
+  Result<JSON> other = JSON::parse("3.14");
+  REQUIRE(other.good);
+  other.value = std::move(json.value);
+  REQUIRE(json.value.is_float64());
+  REQUIRE(other.value.is_array());
 }
 
 TEST_CASE("is_array works as expected") {
@@ -314,4 +326,14 @@ TEST_CASE("we can successfully create a complex JSON") {
   Result<std::string> dump = document.dump();
   REQUIRE(dump.good);
   std::clog << dump.value << std::endl;
+}
+
+TEST_CASE("set_value_string will base64 a string") {
+  JSON json;
+  std::string string{(char *)binary_input, sizeof(binary_input)};
+  json.set_value_string(std::move(string));
+  Result<std::string> res = json.dump();
+  REQUIRE(res.good);
+  REQUIRE(res.value.size() > 0);
+  std::clog << res.value << std::endl;
 }
