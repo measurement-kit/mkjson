@@ -14,7 +14,6 @@ targets:
   executables:
     unit-tests:
       compile: [unit-tests.cpp]
-      link: [mkjson]
 
 tests:
   unit_tests:

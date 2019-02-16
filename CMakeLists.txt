@@ -195,7 +195,6 @@ add_executable(
 )
 target_link_libraries(
   unit-tests
-  mkjson
   ${CMAKE_REQUIRED_LIBRARIES}
 )
 

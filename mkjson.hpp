@@ -121,6 +121,12 @@ class JSON {
   /// ~JSON destroys the allocated resources.
   ~JSON() noexcept;
 
+  // Friend is a forward declaration to a friend class.
+  class Friend;
+
+  // Friend is a friend of us.
+  friend class Friend;
+
  private:
   // Impl is a forward declaration to the internal implementation.
   class Impl;
@@ -160,6 +166,17 @@ class JSON::Impl {
   // Impl constructs an empty implementation.
   Impl() noexcept;
 };
+
+// JSON::Friend is the definition of the class friend of JSON.
+class JSON::Friend {
+ public:
+  // unwrap allows to unwrap a JSON to get the inner nlohmann::json.
+  static nlohmann::json &unwrap(JSON &json) noexcept;
+};
+
+/*static*/ nlohmann::json &JSON::Friend::unwrap(JSON &json) noexcept {
+  return json.impl->nlohmann_json;
+}
 
 /*explicit*/ JSON::Impl::Impl(nlohmann::json &&value) noexcept {
   std::swap(value, nlohmann_json);
@@ -290,7 +307,7 @@ Result<int64_t> JSON::get_value_int64() noexcept {
   auto valuep = impl->nlohmann_json.get_ptr<int64_t *>();
   if (valuep == nullptr) {
     result.good = false;
-    result.failure = "Not a int64";
+    result.failure = "Not an int64";
     return result;
   }
   result.value = *valuep;
