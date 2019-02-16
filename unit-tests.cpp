@@ -25,7 +25,7 @@ TEST_CASE("parse works as expected") {
 
 TEST_CASE("serialize works as expected") {
   JSON json;
-  Result<void> dump = json.dump();
+  Result<std::string> dump = json.dump();
   REQUIRE(dump.good);
   std::clog << dump.value << std::endl;
 }

@@ -85,7 +85,7 @@ class JSON {
   /// it has successfully returned, no value will be at @p key anymore.
   Result<JSON> get_value_at(const std::string &key) noexcept;
 
-  /// get_value_array assumes that the JSON is an arrays and returns such
+  /// get_value_array assumes that the JSON is an array and returns such
   /// array. This method has move semantics; after it successfully returns,
   /// the JSON will become empty.
   Result<std::vector<JSON>> get_value_array() noexcept;
@@ -138,6 +138,8 @@ class JSON {
 // MKJSON_INLINE_IMPL allows to inline the implementation.
 #ifdef MKJSON_INLINE_IMPL
 
+#include <exception>
+#include <type_traits>
 #include <utility>
 
 #include "json.hpp"
