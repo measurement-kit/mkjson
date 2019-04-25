@@ -7,6 +7,10 @@ main use case is vendoring of a specific tag inside Measurement Kit. Because
 this is just a basic building block, we do not provide any stable API guarantee
 for this library. For this reason, we'll never release `v1.0.0`.
 
+⚠: This repository is archived. It has been a nice experiment for understanding
+how we could have proceeded, but we don't plan on going forward in this
+direction for the time being. So it's archived to make this fact super clear.
+
 ## Regenerating build files
 
 Possibly edit `MKBuild.yaml`, then run:
